@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import '../home/chat_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _otpController = TextEditingController();
   final TextEditingController _userPasswordController = TextEditingController();
 
+  String completePhoneNumber = '';
   ConfirmationResult? _confirmationResult;
 
   Future<void> _login() async {
@@ -31,11 +33,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       if (loginStep == 1) {
-        if (_phoneController.text.isNotEmpty) {
+        if (completePhoneNumber.isNotEmpty) {
           try {
-            // Firebase Phone Auth for Web
+            // Firebase Phone Auth for Web requires the full international number
             _confirmationResult = await FirebaseAuth.instance.signInWithPhoneNumber(
-              _phoneController.text,
+              completePhoneNumber,
             );
             setState(() => loginStep = 2);
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Real OTP SMS sent!')));
@@ -57,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (_userPasswordController.text.isNotEmpty) {
           try {
             final String backendUrl = 'https://mychat-vq7q.onrender.com';
-            final String phone = _phoneController.text;
+            final String phone = completePhoneNumber;
             final String password = _userPasswordController.text;
 
             // Try to Register
@@ -156,10 +158,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ] else ...[
                     if (loginStep == 1)
-                      TextField(
+                      IntlPhoneField(
                         controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(hintText: 'Phone number', prefixIcon: Icon(Icons.phone)),
+                        decoration: const InputDecoration(
+                          hintText: 'Phone number',
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                        initialCountryCode: 'IN', // Default to India
+                        onChanged: (phone) {
+                          completePhoneNumber = phone.completeNumber;
+                        },
                       ),
                     if (loginStep == 2)
                       TextField(
