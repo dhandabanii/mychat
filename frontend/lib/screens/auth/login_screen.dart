@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../home/chat_list_screen.dart';
 import '../home/chat_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -218,16 +218,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: const InputDecoration(hintText: 'Full Name', prefixIcon: Icon(Icons.person)),
                     ),
                     const SizedBox(height: 20),
-                    IntlPhoneField(
-                      controller: _phoneController,
-                      style: const TextStyle(color: Colors.white),
-                      dropdownTextStyle: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        hintText: 'Phone number',
-                        prefixIcon: Icon(Icons.phone),
-                      ),
-                      initialCountryCode: 'IN',
-                      onChanged: (phone) => completePhoneNumber = phone.completeNumber,
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(4)),
+                          ),
+                          child: const Text('🇮🇳 +91', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(
+                              hintText: 'Phone number',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                              ),
+                            ),
+                            onChanged: (val) => completePhoneNumber = '+91$val',
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     TextField(
