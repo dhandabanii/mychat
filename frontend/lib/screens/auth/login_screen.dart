@@ -10,12 +10,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool isAdminLogin = false;
+  int loginStep = 1;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+  final TextEditingController _userPasswordController = TextEditingController();
 
   void _login() {
-    // Basic navigation for now
     if (isAdminLogin) {
       if (_emailController.text == 'admin@mychat.com' && _passwordController.text == 'admin123') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: true)));
@@ -23,10 +25,29 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid Admin Credentials')));
       }
     } else {
-      if (_phoneController.text.isNotEmpty) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
+      if (loginStep == 1) {
+        if (_phoneController.text.isNotEmpty) {
+          setState(() => loginStep = 2);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP sent to phone! (Enter any OTP)')));
+        }
+      } else if (loginStep == 2) {
+        if (_otpController.text.isNotEmpty) {
+          setState(() => loginStep = 3);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP verified! Please create a password.')));
+        }
+      } else if (loginStep == 3) {
+        if (_userPasswordController.text.isNotEmpty) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
+        }
       }
     }
+  }
+
+  String _getButtonText() {
+    if (isAdminLogin) return 'Login';
+    if (loginStep == 1) return 'Get OTP';
+    if (loginStep == 2) return 'Verify OTP';
+    return 'Save & Login';
   }
 
   @override
@@ -36,7 +57,10 @@ class _LoginScreenState extends State<LoginScreen> {
         title: const Text('MyCHAT Login'),
         actions: [
           TextButton(
-            onPressed: () => setState(() => isAdminLogin = !isAdminLogin),
+            onPressed: () => setState(() {
+              isAdminLogin = !isAdminLogin;
+              loginStep = 1; // reset on switch
+            }),
             child: Text(isAdminLogin ? 'User Login' : 'Admin Login', style: const TextStyle(color: Colors.white)),
           )
         ],
@@ -54,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Icon(Icons.chat_bubble_outline, size: 80, color: Color(0xFF00A884)),
                   const SizedBox(height: 32),
                   Text(
-                    isAdminLogin ? 'Admin Portal' : 'Enter your phone number',
+                    isAdminLogin ? 'Admin Portal' : (loginStep == 1 ? 'Enter your phone number' : loginStep == 2 ? 'Enter OTP' : 'Create a Password'),
                     style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
@@ -72,11 +96,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: const InputDecoration(hintText: 'Admin Password', prefixIcon: Icon(Icons.lock)),
                     ),
                   ] else ...[
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(hintText: 'Phone number', prefixIcon: Icon(Icons.phone)),
-                    ),
+                    if (loginStep == 1)
+                      TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(hintText: 'Phone number', prefixIcon: Icon(Icons.phone)),
+                      ),
+                    if (loginStep == 2)
+                      TextField(
+                        controller: _otpController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(hintText: '6-digit OTP', prefixIcon: Icon(Icons.message)),
+                      ),
+                    if (loginStep == 3)
+                      TextField(
+                        controller: _userPasswordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(hintText: 'New Password', prefixIcon: Icon(Icons.lock)),
+                      ),
                   ],
                   const SizedBox(height: 24),
                   ElevatedButton(
@@ -87,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     ),
-                    child: const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text(_getButtonText(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
