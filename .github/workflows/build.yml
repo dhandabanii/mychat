@@ -34,7 +34,18 @@ jobs:
 
       - name: Build Web App
         working-directory: ./frontend
-        run: flutter build web --release --base-href "/mychat/"
+        run: |
+          flutter build web --release --web-renderer canvaskit > build_error_log.txt 2>&1 || true
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add build_error_log.txt
+          git commit -m "ci: capture web build error log" || true
+          git push || true
+          # We check if build succeeded by checking if build/web index.html exists
+          if [ ! -f "build/web/index.html" ]; then
+            echo "Build failed!"
+            exit 1
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
