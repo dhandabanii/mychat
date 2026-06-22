@@ -24,6 +24,12 @@ enum GroupRole {
   SUPER_ADMIN
 }
 
+enum GroupCategory {
+  KL
+  DEAR
+  NONE
+}
+
 enum ConversationType {
   DIRECT
   GROUP
@@ -97,6 +103,8 @@ model Conversation {
   groupName        String?
   groupDescription String?
   groupAvatarUrl   String?
+  category         GroupCategory    @default(NONE)
+  onlyAdminsCanMessage Boolean      @default(false)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -125,6 +133,8 @@ model Message {
   mediaUrl         String?       // Encrypted media URL
   type             MessageType   @default(TEXT)
   status           MessageStatus @default(SENT)
+  isEdited         Boolean       @default(false)
+  isDeleted        Boolean       @default(false)
   createdAt        DateTime      @default(now())
 
   conversation     Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)

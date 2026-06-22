@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../chat/chat_detail_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
-  const ChatListScreen({super.key});
+  final bool isAdmin;
+  const ChatListScreen({super.key, this.isAdmin = false});
 
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
@@ -10,13 +11,14 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final List<Map<String, String>> dummyChats = [
-    {'name': 'John Doe', 'msg': 'Hey, how are you?', 'time': '10:30 AM'},
-    {'name': 'Jane Smith', 'msg': 'Are we still on for today?', 'time': '09:15 AM'},
-    {'name': 'Work Group', 'msg': 'Alice: Please review the doc', 'time': 'Yesterday'},
-    {'name': 'Mom', 'msg': 'Call me when you are free.', 'time': 'Yesterday'},
+    {'name': 'John Doe', 'msg': 'Hey, how are you?', 'time': '10:30 AM', 'category': 'NONE'},
+    {'name': 'KL Winners', 'msg': 'Results out!', 'time': '09:15 AM', 'category': 'KL'},
+    {'name': 'DEAR Participants', 'msg': 'Tomorrow 8PM draw', 'time': 'Yesterday', 'category': 'DEAR'},
+    {'name': 'Mom', 'msg': 'Call me when you are free.', 'time': 'Yesterday', 'category': 'NONE'},
   ];
 
   String? selectedChatUser;
+  String currentCategoryFilter = 'ALL'; // ALL, KL, DEAR
 
   @override
   Widget build(BuildContext context) {
@@ -64,18 +66,37 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _buildChatList({required bool isDesktop}) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('WhatsApp Clone', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(widget.isAdmin ? 'MyCHAT (Admin)' : 'MyCHAT', style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF202C33),
         actions: [
           IconButton(icon: const Icon(Icons.camera_alt_outlined), onPressed: () {}),
           IconButton(icon: const Icon(Icons.search), onPressed: () {}),
           IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(50),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['ALL', 'KL', 'DEAR'].map((cat) {
+              return TextButton(
+                onPressed: () => setState(() => currentCategoryFilter = cat),
+                child: Text(
+                  cat,
+                  style: TextStyle(
+                    color: currentCategoryFilter == cat ? Colors.white : Colors.grey,
+                    fontWeight: currentCategoryFilter == cat ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ),
       body: ListView.builder(
-        itemCount: dummyChats.length,
+        itemCount: dummyChats.where((c) => currentCategoryFilter == 'ALL' || c['category'] == currentCategoryFilter).length,
         itemBuilder: (context, index) {
-          final chat = dummyChats[index];
+          final filteredChats = dummyChats.where((c) => currentCategoryFilter == 'ALL' || c['category'] == currentCategoryFilter).toList();
+          final chat = filteredChats[index];
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             tileColor: selectedChatUser == chat['name'] && isDesktop ? const Color(0xFF2A3942) : null,
@@ -118,10 +139,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        child: const Icon(Icons.message),
-      ),
+      floatingActionButton: widget.isAdmin 
+        ? FloatingActionButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Admin: Create Group Feature!')));
+            },
+            child: const Icon(Icons.group_add),
+          )
+        : FloatingActionButton(
+            onPressed: () {},
+            child: const Icon(Icons.message),
+          ),
     );
   }
 }
