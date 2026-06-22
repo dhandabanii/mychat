@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../home/chat_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,7 +20,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _otpController = TextEditingController();
   final TextEditingController _userPasswordController = TextEditingController();
 
-  void _login() {
+  ConfirmationResult? _confirmationResult;
+
+  Future<void> _login() async {
     if (isAdminLogin) {
       if (_emailController.text == 'admin@mychat.com' && _passwordController.text == 'admin123') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: true)));
@@ -27,17 +32,71 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       if (loginStep == 1) {
         if (_phoneController.text.isNotEmpty) {
-          setState(() => loginStep = 2);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP sent to phone! (Enter any OTP)')));
+          try {
+            // Firebase Phone Auth for Web
+            _confirmationResult = await FirebaseAuth.instance.signInWithPhoneNumber(
+              _phoneController.text,
+            );
+            setState(() => loginStep = 2);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Real OTP SMS sent!')));
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send OTP: $e')));
+          }
         }
       } else if (loginStep == 2) {
-        if (_otpController.text.isNotEmpty) {
-          setState(() => loginStep = 3);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP verified! Please create a password.')));
+        if (_otpController.text.isNotEmpty && _confirmationResult != null) {
+          try {
+            await _confirmationResult!.confirm(_otpController.text);
+            setState(() => loginStep = 3);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone Verified! Please create a password.')));
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid OTP code!')));
+          }
         }
       } else if (loginStep == 3) {
         if (_userPasswordController.text.isNotEmpty) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
+          try {
+            final String backendUrl = 'https://mychat-vq7q.onrender.com';
+            final String phone = _phoneController.text;
+            final String password = _userPasswordController.text;
+
+            // Try to Register
+            final regResponse = await http.post(
+              Uri.parse('$backendUrl/auth/register'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'phoneNumber': phone,
+                'password': password,
+                'fullName': 'User $phone',
+                'deviceId': 'web-browser-123'
+              })
+            );
+
+            if (regResponse.statusCode == 201 || regResponse.statusCode == 200) {
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
+            } else if (regResponse.statusCode == 409) {
+              // User already exists, try Login
+              final loginResponse = await http.post(
+                Uri.parse('$backendUrl/auth/login'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({
+                  'identifier': phone,
+                  'password': password,
+                  'deviceId': 'web-browser-123'
+                })
+              );
+
+              if (loginResponse.statusCode == 201 || loginResponse.statusCode == 200) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Incorrect password for existing user!')));
+              }
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backend Error: ${regResponse.body}')));
+            }
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Network Error: $e')));
+          }
         }
       }
     }
