@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 
 class AppTheme {
   // Colors
@@ -25,7 +25,7 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
-      textTheme: GoogleFonts.interTextTheme().copyWith(
+      textTheme: ThemeData.dark().textTheme.copyWith(
         bodyLarge: const TextStyle(color: textColor),
         bodyMedium: const TextStyle(color: textColor),
         titleLarge: const TextStyle(color: textColor),
