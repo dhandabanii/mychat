@@ -2,13 +2,24 @@ import { Injectable, UnauthorizedException, ConflictException, ForbiddenExceptio
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
+  private transporter;
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+  ) {
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+  }
 
   async onModuleInit() {
     // Seed the static SUPER_ADMIN user
@@ -27,6 +38,51 @@ export class AuthService implements OnModuleInit {
       });
       console.log('Static SUPER_ADMIN seeded successfully.');
     }
+  }
+
+  async sendEmailOtp(email: string) {
+    if (!email) throw new ConflictException('Email is required');
+    
+    // Generate 6 digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60000); // 10 minutes from now
+
+    // Save or update OTP in DB
+    await this.prisma.otpToken.upsert({
+      where: { email },
+      update: { otp, expiresAt },
+      create: { email, otp, expiresAt },
+    });
+
+    // Send email
+    try {
+      await this.transporter.sendMail({
+        from: `"MyCHAT App" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: 'Your MyCHAT Verification Code',
+        text: `Your OTP is: ${otp}. It will expire in 10 minutes.`,
+        html: `<h3>Your MyCHAT Verification Code</h3><p>Your OTP is: <strong>${otp}</strong></p><p>It will expire in 10 minutes.</p>`,
+      });
+      return { message: 'OTP sent successfully' };
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      throw new ConflictException('Failed to send email OTP. Please check your email configuration.');
+    }
+  }
+
+  async verifyEmailOtp(email: string, otp: string) {
+    if (!email || !otp) throw new ConflictException('Email and OTP are required');
+
+    const record = await this.prisma.otpToken.findUnique({ where: { email } });
+    if (!record) throw new UnauthorizedException('No OTP found for this email');
+
+    if (record.otp !== otp) throw new UnauthorizedException('Invalid OTP');
+    if (record.expiresAt < new Date()) throw new UnauthorizedException('OTP has expired');
+
+    // Delete OTP after successful verification so it can't be reused
+    await this.prisma.otpToken.delete({ where: { email } });
+
+    return { message: 'OTP verified successfully' };
   }
 
   async register(data: any) {
