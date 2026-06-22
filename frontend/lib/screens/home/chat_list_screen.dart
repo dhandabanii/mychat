@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../chat/chat_detail_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -71,7 +72,25 @@ class _ChatListScreenState extends State<ChatListScreen> {
         actions: [
           IconButton(icon: const Icon(Icons.camera_alt_outlined), onPressed: () {}),
           IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              if (value == 'logout') {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove('accessToken');
+                if (!mounted) return;
+                Navigator.pushReplacementNamed(context, '/login');
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              return [
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: Text('Logout'),
+                ),
+              ];
+            },
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),

@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../home/chat_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,188 +14,269 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool isAdminLogin = false;
-  int loginStep = 1;
+  bool isLoginMode = false; // Toggle between Login and Signup
+  int signupStep = 1;
+
+  // Controllers
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
-  final TextEditingController _userPasswordController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  
+  // Login specific controllers
+  final TextEditingController _loginEmailController = TextEditingController();
+  final TextEditingController _loginPasswordController = TextEditingController();
 
   String completePhoneNumber = '';
-  ConfirmationResult? _confirmationResult;
+  final String backendUrl = 'https://mychat-vq7q.onrender.com';
+  bool isLoading = false;
 
-  Future<void> _login() async {
+  Future<void> _saveTokenAndNavigate(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('accessToken', token);
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
+  }
+
+  Future<void> _handleLogin() async {
     if (isAdminLogin) {
-      if (_emailController.text == 'admin@mychat.com' && _passwordController.text == 'admin123') {
+      if (_loginEmailController.text == 'admin@mychat.com' && _loginPasswordController.text == 'admin123') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: true)));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid Admin Credentials')));
       }
-    } else {
-      if (loginStep == 1) {
-        if (completePhoneNumber.isNotEmpty) {
-          try {
-            // Firebase Phone Auth for Web requires the full international number
-            _confirmationResult = await FirebaseAuth.instance.signInWithPhoneNumber(
-              completePhoneNumber,
-            );
-            setState(() => loginStep = 2);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Real OTP SMS sent!')));
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send OTP: $e')));
-          }
-        }
-      } else if (loginStep == 2) {
-        if (_otpController.text.isNotEmpty && _confirmationResult != null) {
-          try {
-            await _confirmationResult!.confirm(_otpController.text);
-            setState(() => loginStep = 3);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone Verified! Please create a password.')));
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid OTP code!')));
-          }
-        }
-      } else if (loginStep == 3) {
-        if (_userPasswordController.text.isNotEmpty) {
-          try {
-            final String backendUrl = 'https://mychat-vq7q.onrender.com';
-            final String phone = completePhoneNumber;
-            final String password = _userPasswordController.text;
+      return;
+    }
 
-            // Try to Register
-            final regResponse = await http.post(
-              Uri.parse('$backendUrl/auth/register'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'phoneNumber': phone,
-                'password': password,
-                'fullName': 'User $phone',
-                'deviceId': 'web-browser-123'
-              })
-            );
+    if (_loginEmailController.text.isEmpty || _loginPasswordController.text.isEmpty) return;
 
-            if (regResponse.statusCode == 201 || regResponse.statusCode == 200) {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
-            } else if (regResponse.statusCode == 409) {
-              // User already exists, try Login
-              final loginResponse = await http.post(
-                Uri.parse('$backendUrl/auth/login'),
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode({
-                  'identifier': phone,
-                  'password': password,
-                  'deviceId': 'web-browser-123'
-                })
-              );
+    setState(() => isLoading = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'identifier': _loginEmailController.text,
+          'password': _loginPasswordController.text,
+          'deviceId': 'web-browser-123'
+        }),
+      );
 
-              if (loginResponse.statusCode == 201 || loginResponse.statusCode == 200) {
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ChatListScreen(isAdmin: false)));
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Incorrect password for existing user!')));
-              }
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backend Error: ${regResponse.body}')));
-            }
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Network Error: $e')));
-          }
-        }
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        await _saveTokenAndNavigate(data['accessToken']);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid email or password')));
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Network Error: $e')));
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
-  String _getButtonText() {
-    if (isAdminLogin) return 'Login';
-    if (loginStep == 1) return 'Get OTP';
-    if (loginStep == 2) return 'Verify OTP';
-    return 'Save & Login';
+  Future<void> _handleSignup() async {
+    if (signupStep == 1) {
+      if (_nameController.text.isEmpty || _emailController.text.isEmpty || completePhoneNumber.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+        return;
+      }
+      setState(() => isLoading = true);
+      try {
+        final response = await http.post(
+          Uri.parse('$backendUrl/auth/send-email-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': _emailController.text}),
+        );
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          setState(() => signupStep = 2);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP sent to your email!')));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${response.body}')));
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      } finally {
+        setState(() => isLoading = false);
+      }
+    } else if (signupStep == 2) {
+      if (_otpController.text.isEmpty) return;
+      setState(() => isLoading = true);
+      try {
+        final response = await http.post(
+          Uri.parse('$backendUrl/auth/verify-email-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': _emailController.text, 'otp': _otpController.text}),
+        );
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          setState(() => signupStep = 3);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email verified! Create a password.')));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid OTP code')));
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      } finally {
+        setState(() => isLoading = false);
+      }
+    } else if (signupStep == 3) {
+      if (_passwordController.text != _confirmPasswordController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match!')));
+        return;
+      }
+      if (_passwordController.text.length < 6) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password must be at least 6 characters')));
+        return;
+      }
+      setState(() => isLoading = true);
+      try {
+        final response = await http.post(
+          Uri.parse('$backendUrl/auth/register'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phoneNumber': completePhoneNumber,
+            'email': _emailController.text,
+            'password': _passwordController.text,
+            'fullName': _nameController.text,
+            'deviceId': 'web-browser-123'
+          }),
+        );
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = jsonDecode(response.body);
+          await _saveTokenAndNavigate(data['accessToken']);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to register: ${response.body}')));
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      } finally {
+        setState(() => isLoading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MyCHAT Login'),
+        title: const Text('MyCHAT', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF1F2C34),
         actions: [
           TextButton(
-            onPressed: () => setState(() {
-              isAdminLogin = !isAdminLogin;
-              loginStep = 1; // reset on switch
-            }),
+            onPressed: () => setState(() => isAdminLogin = !isAdminLogin),
             child: Text(isAdminLogin ? 'User Login' : 'Admin Login', style: const TextStyle(color: Colors.white)),
           )
         ],
       ),
-      body: SafeArea(
-        child: Center(
+      backgroundColor: const Color(0xFF121B22),
+      body: Center(
+        child: SingleChildScrollView(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(Icons.chat_bubble_outline, size: 80, color: Color(0xFF00A884)),
-                  const SizedBox(height: 32),
-                  Text(
-                    isAdminLogin ? 'Admin Portal' : (loginStep == 1 ? 'Enter your phone number' : loginStep == 2 ? 'Enter OTP' : 'Create a Password'),
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.chat_bubble_outline, size: 80, color: Color(0xFF00A884)),
+                const SizedBox(height: 20),
+                Text(
+                  isAdminLogin ? 'Admin Access' : (isLoginMode ? 'Welcome Back' : 'Create Account'),
+                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 40),
+                
+                if (isAdminLogin || isLoginMode) ...[
+                  TextField(
+                    controller: _loginEmailController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(hintText: 'Email address', prefixIcon: Icon(Icons.email)),
                   ),
-                  const SizedBox(height: 32),
-                  if (isAdminLogin) ...[
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _loginPasswordController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(hintText: 'Password', prefixIcon: Icon(Icons.lock)),
+                  ),
+                  const SizedBox(height: 30),
+                  isLoading
+                      ? const CircularProgressIndicator(color: Color(0xFF00A884))
+                      : ElevatedButton(
+                          onPressed: _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00A884),
+                            minimumSize: const Size(double.infinity, 50),
+                          ),
+                          child: const Text('Login', style: TextStyle(fontSize: 16)),
+                        ),
+                ] else ...[
+                  if (signupStep == 1) ...[
+                    TextField(
+                      controller: _nameController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(hintText: 'Full Name', prefixIcon: Icon(Icons.person)),
+                    ),
+                    const SizedBox(height: 20),
+                    IntlPhoneField(
+                      controller: _phoneController,
+                      style: const TextStyle(color: Colors.white),
+                      dropdownTextStyle: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        hintText: 'Phone number',
+                        prefixIcon: Icon(Icons.phone),
+                      ),
+                      initialCountryCode: 'IN',
+                      pickerDialogStyle: PickerDialogStyle(width: 400),
+                      onChanged: (phone) => completePhoneNumber = phone.completeNumber,
+                    ),
+                    const SizedBox(height: 10),
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(hintText: 'Admin Email', prefixIcon: Icon(Icons.email)),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(hintText: 'Email address', prefixIcon: Icon(Icons.email)),
                     ),
-                    const SizedBox(height: 16),
+                  ],
+                  if (signupStep == 2) ...[
+                    const Text('Enter the 6-digit code sent to your email', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(hintText: 'Email OTP Code', prefixIcon: Icon(Icons.message)),
+                    ),
+                  ],
+                  if (signupStep == 3) ...[
                     TextField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(hintText: 'Admin Password', prefixIcon: Icon(Icons.lock)),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(hintText: 'Create Password', prefixIcon: Icon(Icons.lock)),
                     ),
-                  ] else ...[
-                    if (loginStep == 1)
-                      IntlPhoneField(
-                        controller: _phoneController,
-                        decoration: const InputDecoration(
-                          hintText: 'Phone number',
-                          prefixIcon: Icon(Icons.phone),
-                        ),
-                        initialCountryCode: 'IN', // Default to India
-                        pickerDialogStyle: PickerDialogStyle(
-                          width: 400, // Makes the dropdown small and nice on desktop
-                        ),
-                        onChanged: (phone) {
-                          completePhoneNumber = phone.completeNumber;
-                        },
-                      ),
-                    if (loginStep == 2)
-                      TextField(
-                        controller: _otpController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(hintText: '6-digit OTP', prefixIcon: Icon(Icons.message)),
-                      ),
-                    if (loginStep == 3)
-                      TextField(
-                        controller: _userPasswordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(hintText: 'New Password', prefixIcon: Icon(Icons.lock)),
-                      ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      obscureText: true,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(hintText: 'Confirm Password', prefixIcon: Icon(Icons.lock_outline)),
+                    ),
                   ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                    ),
-                    child: Text(_getButtonText(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
+                  const SizedBox(height: 30),
+                  isLoading
+                      ? const CircularProgressIndicator(color: Color(0xFF00A884))
+                      : ElevatedButton(
+                          onPressed: _handleSignup,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00A884),
+                            minimumSize: const Size(double.infinity, 50),
+                          ),
+                          child: Text(
+                            signupStep == 1 ? 'Send Email OTP' : (signupStep == 2 ? 'Verify OTP' : 'Complete Registration'),
+                            style: const TextStyle(fontSize: 16)
+                          ),
+                        ),
                 ],
               ),
             ),
