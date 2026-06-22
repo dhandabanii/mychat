@@ -66,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        await _saveTokenAndNavigate(data['accessToken']);
+        await _saveTokenAndNavigate(data['accessToken']?.toString() ?? '');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid email or password')));
       }
@@ -145,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         if (response.statusCode == 200 || response.statusCode == 201) {
           final data = jsonDecode(response.body);
-          await _saveTokenAndNavigate(data['accessToken']);
+          await _saveTokenAndNavigate(data['accessToken']?.toString() ?? '');
         } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to register: ${response.body}')));
         }
