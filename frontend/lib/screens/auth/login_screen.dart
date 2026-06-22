@@ -165,6 +165,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           prefixIcon: Icon(Icons.phone),
                         ),
                         initialCountryCode: 'IN', // Default to India
+                        pickerDialogStyle: PickerDialogStyle(
+                          width: 400, // Makes the dropdown small and nice on desktop
+                        ),
                         onChanged: (phone) {
                           completePhoneNumber = phone.completeNumber;
                         },
