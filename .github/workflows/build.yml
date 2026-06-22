@@ -42,18 +42,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./frontend/build/web
 
-      # - name: Regenerate Android Project
-      #   working-directory: ./frontend
-      #   run: |
-      #     rm -rf android
-      #     flutter create .
+      - name: Build Android APK
+        working-directory: ./frontend
+        run: flutter build apk --release
 
-      # - name: Build Android APK
-      #   working-directory: ./frontend
-      #   run: flutter build apk --release
-
-      # - name: Upload APK Artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: app-release
-      #     path: ./frontend/build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: ./frontend/build/app/outputs/flutter-apk/app-release.apk
